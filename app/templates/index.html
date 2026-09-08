@@ -139,7 +139,7 @@ async function doLogin(){
   const password = document.getElementById('auth-password').value.trim();
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if(error) alert('登录失败: ' + error.message);
-  else { document.getElementById('auth-overlay').classList.remove('show'); sessionStorage.setItem('kb_token', data.session.access_token); onAuth(); }
+  else { document.getElementById('auth-overlay').classList.remove('show'); document.getElementById('user-bar').style.display='flex'; document.getElementById('user-email').textContent = data.user.email; sessionStorage.setItem('kb_token', data.session.access_token); loadOverview(); loadDirs(); loadTypes(); }
 }
 async function doMagicLink(){
   const email = document.getElementById('auth-email').value.trim();
