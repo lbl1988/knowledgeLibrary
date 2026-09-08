@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """浏览路由 —— Pinecone metadata 里存了所有文档元信息"""
+import time
 from fastapi import APIRouter, Depends, Query
 from app.services.vectorstore import query, describe_index
 from app.auth import get_current_user
@@ -8,16 +9,26 @@ from app.services.chunker import chunk_text
 
 router = APIRouter(prefix="/api/browse", tags=["browse"])
 
+# 内存缓存：文档列表 + 缓存时间，避免每次请求都扫全量向量
+_docs_cache: list = []
+_docs_cache_ts: float = 0
+_CACHE_TTL: float = 300.0  # 5 分钟
 
-def _list_all_docs() -> list[dict]:
-    """从 Pinecone 拉所有向量的 metadata，按 doc_id 去重取文档"""
+
+def _list_all_docs(force_refresh: bool = False) -> list[dict]:
+    """从 Pinecone 拉所有向量的 metadata，按 doc_id 去重取文档（带缓存）"""
+    global _docs_cache, _docs_cache_ts
+    now = time.time()
+    if not force_refresh and _docs_cache and (now - _docs_cache_ts) < _CACHE_TTL:
+        return _docs_cache
+
     from app.services.vectorstore import get_index
 
     try:
         idx = get_index()
     except Exception as e:
         print(f"获取 Pinecone index 失败: {e}")
-        return []
+        return _docs_cache
 
     try:
         docs = {}
@@ -29,8 +40,9 @@ def _list_all_docs() -> list[dict]:
         # 用 list() 拉所有向量 ID（serverless index 支持），再分批 fetch metadata
         all_ids = []
         try:
-            for ids in idx.list(prefix=""):
-                all_ids.extend(ids)
+            for page in idx.list(prefix=""):
+                for item in page:
+                    all_ids.append(item.id if hasattr(item, 'id') else str(item))
         except Exception as le:
             print(f"list() 不可用，回退到 query: {le}")
             # 回退：用随机向量 + 大 top_k 查
@@ -51,11 +63,13 @@ def _list_all_docs() -> list[dict]:
                         "r2_original": md.get("r2_original", ""),
                         "r2_extracted": md.get("r2_extracted", ""),
                     }
-            return list(docs.values())
+            _docs_cache = list(docs.values())
+            _docs_cache_ts = now
+            return _docs_cache
 
-        # 分批 fetch metadata（每批最多 1000）
-        for i in range(0, len(all_ids), 1000):
-            batch_ids = all_ids[i:i + 1000]
+        # 分批 fetch metadata（每批 100，避免 URL 过长）
+        for i in range(0, len(all_ids), 100):
+            batch_ids = all_ids[i:i + 100]
             fetched = idx.fetch(ids=batch_ids)
             for vid, vdata in fetched.get("vectors", {}).items():
                 md = vdata.get("metadata", {})
@@ -71,10 +85,12 @@ def _list_all_docs() -> list[dict]:
                         "r2_original": md.get("r2_original", ""),
                         "r2_extracted": md.get("r2_extracted", ""),
                     }
-        return list(docs.values())
+        _docs_cache = list(docs.values())
+        _docs_cache_ts = now
+        return _docs_cache
     except Exception as e:
         print(f"list_all_docs 出错: {e}")
-        return []
+        return _docs_cache
 
 
 @router.get("/overview")
