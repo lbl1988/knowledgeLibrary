@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>知识库</title>
+{% if enable_auth %}
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+{% endif %}
+<style>
+:root {
+  --surface: #F7F7F8; --surface-muted: #EFEFF2;
+  --text: #171717; --text-muted: #52525B;
+  --border: rgba(23,23,23,0.12);
+  --brand: #4B3FE3; --brand-soft: #F2F7FF; --brand-text: #1A1759;
+  --radius: 8px; --radius-card: 12px; --radius-full: 999px;
+  --font-sans: "PingFang SC", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --surface: #171717; --surface-muted: #262626; --text: #E5E5E5; --text-muted: #A1A1AA; --border: rgba(229,229,229,0.12); --brand-soft: #1A1759; --brand-text: #CFD8FF; }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-sans); background: var(--surface); color: var(--text); padding: 24px; max-width: 960px; margin: 0 auto; }
+h1 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+.subtitle { font-size: 12px; color: var(--text-muted); margin-bottom: 20px; }
+.metrics { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 20px; }
+.metric { background: var(--surface-muted); border-radius: var(--radius); padding: 12px 16px; }
+.metric-val { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.metric-label { font-size: 12px; color: var(--text-muted); }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; flex-wrap: wrap; }
+.tab { background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 12px; font-size: 14px; font-weight: 500; color: var(--text-muted); cursor: pointer; font-family: var(--font-sans); }
+.tab.active { color: var(--brand); border-bottom-color: var(--brand); }
+.panel { display: none; }
+.panel.active { display: block; }
+.search-box { display: flex; gap: 8px; margin-bottom: 16px; }
+.search-box input { flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 14px; background: var(--surface-muted); color: var(--text); font-family: var(--font-sans); }
+.search-box input:focus { outline: none; border-color: var(--brand); }
+.search-box button { padding: 10px 20px; background: var(--brand); color: #fff; border: none; border-radius: var(--radius); font-size: 14px; cursor: pointer; font-family: var(--font-sans); }
+.search-box button:disabled { opacity: 0.5; cursor: not-allowed; }
+.row { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-radius: var(--radius); background: var(--surface-muted); margin-bottom: 8px; cursor: pointer; transition: background 0.15s; }
+.row:hover { background: var(--brand-soft); }
+.row-name { font-size: 14px; font-weight: 500; }
+.row-meta { font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.result-card { background: var(--surface-muted); border-radius: var(--radius); padding: 14px; margin-bottom: 10px; }
+.result-score { display: inline-block; padding: 2px 8px; border-radius: var(--radius-full); background: var(--brand-soft); color: var(--brand-text); font-size: 12px; font-weight: 500; margin-bottom: 6px; }
+.result-text { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+.result-file { font-size: 14px; font-weight: 500; }
+.badge { display: inline-block; padding: 1px 6px; border-radius: 4px; background: var(--surface); font-size: 11px; color: var(--text-muted); margin-left: 6px; }
+.loading { text-align: center; padding: 40px; color: var(--text-muted); font-size: 14px; }
+.btn-row { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.btn { padding: 4px 10px; border-radius: var(--radius); font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-family: var(--font-sans); text-decoration: none; display: inline-block; }
+.btn:hover { background: var(--brand-soft); color: var(--brand); border-color: var(--brand); }
+.btn-primary { background: var(--brand); color: #fff; border-color: var(--brand); }
+.btn-primary:hover { opacity: 0.9; }
+.chunk-full { display: none; margin-top: 8px; padding: 10px; background: var(--surface); border-radius: var(--radius); font-size: 13px; line-height: 1.6; white-space: pre-wrap; max-height: 300px; overflow-y: auto; border: 1px solid var(--border); }
+.chunk-full.show { display: block; }
+.context-block { margin-top: 8px; padding: 8px 10px; background: var(--surface-muted); border-radius: var(--radius); font-size: 12px; color: var(--text-muted); border-left: 3px solid var(--border); }
+.context-block .ctx-label { font-weight: 500; color: var(--text); margin-bottom: 4px; font-size: 11px; }
+.source-tag { font-size: 10px; padding: 1px 5px; border-radius: 3px; }
+.source-local { background: #E0E7FF; color: #3730A3; }
+.source-web { background: #FEF3C7; color: #92400E; }
+.source-ocr { background: #FCE7F3; color: #9D174D; }
+
+/* 登录遮罩 */
+#auth-overlay { display: none; position: fixed; inset: 0; background: rgba(23,23,23,0.92); z-index: 999; align-items: center; justify-content: center; }
+#auth-overlay.show { display: flex; }
+.auth-card { background: var(--surface); padding: 32px; border-radius: 12px; width: 360px; max-width: 90vw; text-align: center; }
+.auth-card h2 { font-size: 16px; margin-bottom: 16px; }
+.auth-card input { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 14px; background: var(--surface-muted); color: var(--text); }
+.auth-card button { width: 100%; padding: 10px; background: var(--brand); color: #fff; border: none; border-radius: var(--radius); font-size: 14px; cursor: pointer; margin-top: 6px; font-family: var(--font-sans); }
+.auth-link { font-size: 12px; color: var(--text-muted); margin-top: 12px; cursor: pointer; }
+.auth-link:hover { color: var(--brand); }
+.user-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.user-bar .user-email { font-size: 13px; color: var(--text-muted); }
+.user-bar .logout { font-size: 12px; color: var(--brand); cursor: pointer; }
+</style>
+</head>
+<body>
+
+<!-- 登录遮罩（启用认证时显示） -->
+{% if enable_auth %}
+<div id="auth-overlay">
+  <div class="auth-card">
+    <h2>知识库登录</h2>
+    <div id="auth-form">
+      <input id="auth-email" type="email" placeholder="邮箱">
+      <input id="auth-password" type="password" placeholder="密码">
+      <button onclick="doLogin()">登录</button>
+      <button style="background:none;border:1px solid var(--border);color:var(--text)" onclick="doMagicLink()">发送邮箱登录链接</button>
+    </div>
+    <div class="auth-link" onclick="toggleMode()" id="auth-mode-switch">没有账号？发送邀请</div>
+  </div>
+</div>
+{% endif %}
+
+<div id="user-bar" style="display:none" class="user-bar">
+  <span class="user-email" id="user-email"></span>
+  <span class="logout" onclick="logout()">退出</span>
+</div>
+
+<h1>知识库</h1>
+<p class="subtitle">PLC · 标准化 · 学习资料 + 全网搜索</p>
+
+<div class="metrics" id="metrics"></div>
+
+<div class="tabs">
+  <button class="tab active" onclick="showPanel('dirs')">按目录</button>
+  <button class="tab" onclick="showPanel('types')">按类型</button>
+  <button class="tab" onclick="showPanel('search')">搜索</button>
+  <button class="tab" onclick="showPanel('crawl')">全网搜索</button>
+</div>
+
+<div class="panel active" id="p-dirs"><div id="dir-list"></div></div>
+<div class="panel" id="p-types"><div id="type-list"></div></div>
+<div class="panel" id="p-search">
+  <div class="search-box">
+    <input id="q" placeholder="输入搜索词..." onkeydown="if(event.key==='Enter')doSearch()">
+    <button onclick="doSearch()">搜索</button>
+  </div>
+  <div id="search-results"></div>
+</div>
+<div class="panel" id="p-crawl">
+  <div class="search-box">
+    <input id="crawl-q" placeholder="输入关键词，全网搜索并入库...（如：工业机器人 PLC 通讯）" onkeydown="if(event.key==='Enter')doCrawl()">
+    <button onclick="doCrawl()" id="crawl-btn">抓取入库</button>
+  </div>
+  <div id="crawl-result"></div>
+</div>
+
+<script>
+{% if enable_auth %}
+const SUPABASE_URL = {{ supabase_url | tojson }};
+const SUPABASE_KEY = {{ supabase_key | tojson }};
+let supabase = null;
+try { supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch(e) {}
+
+async function doLogin(){
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value.trim();
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if(error) alert('登录失败: ' + error.message);
+  else { document.getElementById('auth-overlay').classList.remove('show'); sessionStorage.setItem('kb_token', data.session.access_token); onAuth(); }
+}
+async function doMagicLink(){
+  const email = document.getElementById('auth-email').value.trim();
+  const { error } = await supabase.auth.signInWithOtp({ email });
+  if(error) alert('发送失败: ' + error.message);
+  else alert('登录链接已发送到 ' + email + '，请查收邮件');
+}
+async function logout(){ sessionStorage.removeItem('kb_token'); document.getElementById('auth-overlay').classList.add('show'); document.getElementById('user-bar').style.display='none'; }
+function toggleMode(){ alert('注册请联系管理员发送邀请'); }
+
+async function checkAuth(){
+  const token = sessionStorage.getItem('kb_token');
+  if(!token){ document.getElementById('auth-overlay').classList.add('show'); return null; }
+  try {
+    const { data: { user } } = await supabase.auth.getUser(token);
+    if(user){ document.getElementById('auth-overlay').classList.remove('show'); document.getElementById('user-bar').style.display='flex'; document.getElementById('user-email').textContent = user.email; return token; }
+    else { sessionStorage.removeItem('kb_token'); document.getElementById('auth-overlay').classList.add('show'); return null; }
+  } catch(e) { sessionStorage.removeItem('kb_token'); document.getElementById('auth-overlay').classList.add('show'); return null; }
+}
+function getAuthHeaders(){
+  const t = sessionStorage.getItem('kb_token');
+  return t ? { 'Authorization': 'Bearer ' + t } : {};
+}
+{% endif %}
+
+async function api(url, options = {}){
+  const opts = { headers: { 'Content-Type': 'application/json', ...(options.headers||{}) }, ...options };
+  {% if enable_auth %}
+  opts.headers = { ...opts.headers, ...getAuthHeaders() };
+  {% endif %}
+  const r = await fetch(url, opts);
+  if(r.status === 401){ {% if enable_auth %}document.getElementById('auth-overlay').classList.add('show');{% endif %} throw new Error('未登录'); }
+  return r.json();
+}
+
+async function loadOverview(){
+  try {
+    const d = await api('/api/browse/overview');
+    const el = document.getElementById('metrics');
+    el.innerHTML = [
+      ['总文档', d.total], ['文本块', d.chunks], ['大小 MB', d.size_mb], ['来源', d.by_folder ? Object.keys(d.by_folder).length : 0]
+    ].map(([l,v]) => `<div class="metric"><div class="metric-val">${v}</div><div class="metric-label">${l}</div></div>`).join('');
+  } catch(e) { document.getElementById('metrics').innerHTML = '<div class="loading">加载失败（可能 Pinecone 未配置）</div>'; }
+}
+
+async function loadDirs(){
+  try {
+    const d = await api('/api/browse/dirs');
+    document.getElementById('dir-list').innerHTML = d.dirs.map(r =>
+      `<div class="row" onclick="loadFiles('${r.top_folder}','')"><span class="row-name">📁 ${r.top_folder}</span><span class="row-meta">${r.cnt} 份 · ${r.sz.toFixed(1)} MB</span></div>`
+    ).join('');
+  } catch(e) { document.getElementById('dir-list').innerHTML = '<div class="loading">加载失败</div>'; }
+}
+
+async function loadTypes(){
+  try {
+    const d = await api('/api/browse/types');
+    document.getElementById('type-list').innerHTML = d.types.map(r =>
+      `<div class="row" onclick="loadFiles('','${r.ext}')"><span class="row-name">${r.ext}</span><span class="row-meta">${r.cnt} 份 · ${r.sz.toFixed(1)} MB</span></div>`
+    ).join('');
+  } catch(e) { document.getElementById('type-list').innerHTML = '<div class="loading">加载失败</div>'; }
+}
+
+async function loadFiles(folder, ext){
+  const params = new URLSearchParams();
+  if(folder) params.set('folder', folder);
+  if(ext) params.set('ext', ext);
+  try {
+    const d = await api('/api/browse/files?' + params);
+    document.getElementById('dir-list').innerHTML = d.files.map(f => {
+      const srcTag = f.source === 'web' ? '<span class="source-tag source-web">网页</span>' : '<span class="source-tag source-local">本地</span>';
+      return `<div class="row" onclick="showFile('${f.doc_id}')"><span class="row-name">📄 ${f.filename}<span class="badge">${f.ext}</span>${srcTag}</span><span class="row-meta">${(f.size_mb||0).toFixed(1)} MB</span></div>`;
+    }).join('');
+    showPanel('dirs');
+  } catch(e) { document.getElementById('dir-list').innerHTML = '<div class="loading">加载失败</div>'; }
+}
+
+// 浏览器原生可预览的扩展名
+const PREVIEWABLE_EXTS = ['.pdf','.txt','.md','.csv','.json','.html','.htm','.xml','.log','.jpg','.jpeg','.png','.gif','.webp','.bmp','.svg','.mp4','.mp3','.wav'];
+
+async function showFile(docId){
+  try {
+    // 走 /api/open/info 拿元信息，决定显示哪些按钮
+    const info = await api('/api/open/info/' + docId);
+    const srcTag = info.source === 'web' ? '<span class="source-tag source-web">全网搜索</span>' : '<span class="source-tag source-local">本地文档</span>';
+    let buttons = '';
+    if(info.source === 'web' && info.web_url){
+      buttons += `<button class="btn btn-primary" onclick="openWeb('${info.web_url}')">打开原网页</button>`;
+    }
+    if(info.has_original){
+      // 在线浏览：仅对浏览器可预览类型显示
+      if(info.previewable){
+        buttons += `<button class="btn btn-primary" onclick="previewFile('${docId}')">在线浏览</button>`;
+      } else {
+        buttons += `<span class="badge" style="background:var(--surface);color:var(--text-muted)">该类型不支持浏览器预览，请下载</span>`;
+      }
+      // 下载到本地：所有类型都显示
+      buttons += `<button class="btn" onclick="downloadFile('${docId}')">下载到本地</button>`;
+    }
+    if(info.has_extracted){
+      buttons += `<button class="btn" onclick="openExtracted('${docId}')">查看纯文本</button>`;
+    }
+    buttons += `<button class="btn" onclick="loadDirs()">返回列表</button>`;
+    document.getElementById('dir-list').innerHTML = `
+      <div class="result-card">
+        <div class="result-file">${info.filename}<span class="badge">${info.ext}</span>${srcTag}</div>
+        <div class="btn-row">${buttons}</div>
+      </div>`;
+  } catch(e) { alert('加载失败: ' + e.message); }
+}
+
+async function previewFile(docId){
+  try {
+    const d = await api('/api/open/preview/' + docId);
+    if(!d.previewable){
+      alert('该文件类型（' + (d.ext||'') + '）不支持浏览器在线预览，请点「下载到本地」');
+      return;
+    }
+    window.open(d.url, '_blank');
+  } catch(e) { alert('预览失败: ' + e.message); }
+}
+
+async function downloadFile(docId){
+  try {
+    const d = await api('/api/open/download/' + docId);
+    // 用 <a download> 触发浏览器下载，跨域时 R2 会带 Content-Disposition: attachment 保证生效
+    const a = document.createElement('a');
+    a.href = d.url;
+    a.download = d.filename || '';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } catch(e) { alert('下载失败: ' + e.message); }
+}
+
+async function openExtracted(docId){
+  try { const d = await api('/api/open/extracted/' + docId); window.open(d.url, '_blank'); }
+  catch(e) { alert('打开失败: ' + e.message); }
+}
+function openWeb(url){ window.open(url, '_blank'); }
+
+async function doSearch(){
+  const q = document.getElementById('q').value.trim();
+  if(!q) return;
+  document.getElementById('search-results').innerHTML = '<div class="loading">搜索中...</div>';
+  try {
+    const d = await api('/api/search?q=' + encodeURIComponent(q));
+    if(!d.results.length){ document.getElementById('search-results').innerHTML='<div class="loading">无结果</div>'; return; }
+    document.getElementById('search-results').innerHTML = d.results.map(r => {
+      const srcTag = r.source === 'web' ? '<span class="source-tag source-web">全网</span>' : '<span class="source-tag source-local">本地</span>';
+      let actionBtns = '';
+      if(r.source === 'web' && r.url){
+        actionBtns = `<button class="btn btn-primary" onclick="openWeb('${r.url}')">打开网页</button>`;
+      } else if(r.r2_original){
+        // 搜索结果只给详情按钮，详情页里有完整的预览/下载按钮
+        const ext = (r.ext||'').toLowerCase();
+        const canPreview = PREVIEWABLE_EXTS.includes(ext);
+        actionBtns = canPreview
+          ? `<button class="btn btn-primary" onclick="previewFile('${r.doc_id}')">在线浏览</button><button class="btn" onclick="downloadFile('${r.doc_id}')">下载</button>`
+          : `<button class="btn" onclick="downloadFile('${r.doc_id}')">下载到本地</button>`;
+      }
+      return `<div class="result-card">
+        <div class="result-score">相关度 ${r.score}</div>
+        <div class="result-file" style="cursor:pointer" onclick="showFile('${r.doc_id}')">${r.filename}<span class="badge">${r.ext}</span><span class="badge">${r.top_folder}</span>${srcTag}</div>
+        <div class="result-text">${r.text}...</div>
+        <div class="btn-row">${actionBtns}<button class="btn" onclick="showChunk('${r.doc_id}', ${r.chunk_index||0})">查看片段</button><button class="btn" onclick="showFile('${r.doc_id}')">文档详情</button></div>
+        <div class="chunk-full" id="chunk-${r.doc_id}-${r.chunk_index||0}"></div>
+      </div>`;
+    }).join('');
+  } catch(e) { document.getElementById('search-results').innerHTML = '<div class="loading">搜索失败: ' + e.message + '</div>'; }
+}
+
+async function showChunk(docId, chunkIndex){
+  const div = document.getElementById('chunk-' + docId + '-' + chunkIndex);
+  if(div.classList.contains('show')){ div.classList.remove('show'); return; }
+  div.innerHTML = '<div class="loading">加载中...</div>';
+  div.classList.add('show');
+  try {
+    const d = await api('/api/chunk/' + docId + '/' + chunkIndex);
+    let html = `<div class="context-block" style="border-left-color:var(--brand);background:var(--brand-soft);"><div class="ctx-label" style="color:var(--brand)">★ 命中片段 (块 ${d.chunk_index})</div>${d.text}</div>`;
+    div.innerHTML = html;
+  } catch(e) { div.innerHTML = '<div class="loading">加载失败</div>'; }
+}
+
+async function doCrawl(){
+  const q = document.getElementById('crawl-q').value.trim();
+  if(!q) return;
+  const btn = document.getElementById('crawl-btn');
+  btn.disabled = true; btn.textContent = '抓取中...';
+  document.getElementById('crawl-result').innerHTML = '<div class="loading">Jina AI 搜索 + 嵌入入库，大概 15 秒...</div>';
+  try {
+    const d = await api('/api/crawl', { method: 'POST', body: JSON.stringify({ keyword: q, max_results: 5 }) });
+    if(d.ok){
+      document.getElementById('crawl-result').innerHTML = `<div class="result-card"><div class="result-file">✓ 抓取完成</div><div class="result-text">新增 ${d.docs} 篇文章，${d.chunks} 个文本块</div><div class="btn-row"><button class="btn btn-primary" onclick="document.getElementById('q').value='${q}';showPanel('search');doSearch()">搜索 ${q}</button></div></div>`;
+      loadOverview();
+    } else {
+      document.getElementById('crawl-result').innerHTML = '<div class="loading">' + (d.message || '无有效内容') + '</div>';
+    }
+  } catch(e) {
+    document.getElementById('crawl-result').innerHTML = '<div class="loading">抓取失败: ' + e.message + '</div>';
+  }
+  btn.disabled = false; btn.textContent = '抓取入库';
+}
+
+function showPanel(name){
+  ['dirs','types','search','crawl'].forEach((n,i) => {
+    document.querySelectorAll('.tab')[i].classList.toggle('active', n===name);
+    document.getElementById('p-'+n).classList.toggle('active', n===name);
+  });
+}
+
+{% if enable_auth %}
+checkAuth().then(token => { if(token){ loadOverview(); loadDirs(); loadTypes(); } });
+{% else %}
+loadOverview(); loadDirs(); loadTypes();
+{% endif %}
+</script>
+</body>
+</html>
