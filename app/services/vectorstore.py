@@ -35,16 +35,18 @@ def get_index() -> pinecone.Index:
 
 def upsert(ids: List[str], vectors: List[List[float]],
            documents: List[str], metadatas: List[dict], batch_size: int = 100):
-    """批量 upsert（Pinecone 单批上限 100）"""
+    """批量 upsert（Pinecone v10 API: vectors=[(id, values, metadata), ...]）"""
     idx = get_index()
     for start in range(0, len(ids), batch_size):
         end = start + batch_size
-        idx.upsert(
-            vectors=vectors[start:end],
-            ids=ids[start:end],
-            documents=documents[start:end],
-            metadatas=metadatas[start:end],
-        )
+        # 把 text 存入 metadata（Pinecone v10 不再支持 documents 参数）
+        batch = []
+        for i in range(start, end):
+            meta = dict(metadatas[i])
+            if "text" not in meta and i < len(documents):
+                meta["text"] = documents[i]
+            batch.append((ids[i], vectors[i], meta))
+        idx.upsert(vectors=batch)
 
 
 def query(vector: List[float], top_k: int = 10,

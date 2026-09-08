@@ -127,7 +127,7 @@ def main():
         nonlocal batch_vecs, batch_ids, batch_docs, batch_meta, upsert_count
         if not batch_vecs:
             return
-        pinecone.upsert(batch_ids, [v.tolist() for v in batch_vecs], batch_docs, batch_meta, batch_size=100)
+        vectorstore.upsert(batch_ids, [v.tolist() for v in batch_vecs], batch_docs, batch_meta, batch_size=100)
         upsert_count += len(batch_ids)
         batch_vecs = []
         batch_ids = []
@@ -168,15 +168,15 @@ def main():
             "text": chunk_text,  # Pinecone metadata 存完整文本，搜索时直接返回
         })
 
-        if len(batch_ids) >= 100:
-            # 批量嵌入
+        if len(batch_ids) >= 32:
+            # 批量嵌入（小批量 + 延迟，避免 Jina 限流 100k token/min）
             vecs = embedder.embed(batch_docs)
             batch_vecs = list(vecs)
             flush_batch()
+            time.sleep(2)  # 每批后等 2 秒，控制 token 速率（超限自动重试）
 
-        if (i + 1) % 5000 == 0:
+        if (i + 1) % 1000 == 0:
             print(f"  进度: {i+1}/{total_chunks} 块, upserted {upsert_count}")
-            time.sleep(1)  # 避免打爆 API 限流
 
     # 最后一批
     if batch_docs:
