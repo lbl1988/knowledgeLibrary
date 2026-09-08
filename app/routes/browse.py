@@ -10,43 +10,67 @@ router = APIRouter(prefix="/api/browse", tags=["browse"])
 
 
 def _list_all_docs() -> list[dict]:
-    """从 Pinecone 拉所有向量的 metadata，按 chunk_id 去重取文档"""
-    import pinecone
-    from app.config import PINECONE_API_KEY, PINECONE_ENV, PINECONE_INDEX
+    """从 Pinecone 拉所有向量的 metadata，按 doc_id 去重取文档"""
+    from app.services.vectorstore import get_index
 
-    if not PINECONE_API_KEY:
+    try:
+        idx = get_index()
+    except Exception as e:
+        print(f"获取 Pinecone index 失败: {e}")
         return []
 
-    pc = pinecone.Pinecone(api_key=PINECONE_API_KEY)
-    idx = pc.Index(PINECONE_INDEX)
-
-    # 用零向量查大量结果（Pinecone query 不限制 top_k 上限，免费版 100000）
-    vec = embed_single("") if False else [0.0] * 1024  # 占位，实际用 fetch
     try:
-        # 更高效：用 fetch 拉所有 ID（分批）
         docs = {}
         stats = describe_index()
         total = stats.get("total_vector_count", 0)
         if total == 0:
             return []
 
-        # 用空向量 + 大 top_k 拉一批元数据，然后按 doc_id 聚合
-        vec = [0.0] * 1024
-        results = idx.query(vector=vec, top_k=min(total, 5000), include_metadata=True)
-        for match in results.get("matches", []):
-            md = match.get("metadata", {})
-            doc_id = md.get("doc_id")
-            if doc_id and doc_id not in docs:
-                docs[doc_id] = {
-                    "doc_id": doc_id,
-                    "filename": md.get("filename", ""),
-                    "ext": md.get("ext", ""),
-                    "top_folder": md.get("top_folder", ""),
-                    "size_mb": md.get("size_mb", 0),
-                    "source": md.get("source", "local"),
-                    "r2_original": md.get("r2_original", ""),
-                    "r2_extracted": md.get("r2_extracted", ""),
-                }
+        # 用 list() 拉所有向量 ID（serverless index 支持），再分批 fetch metadata
+        all_ids = []
+        try:
+            for ids in idx.list(prefix=""):
+                all_ids.extend(ids)
+        except Exception as le:
+            print(f"list() 不可用，回退到 query: {le}")
+            # 回退：用随机向量 + 大 top_k 查
+            import random
+            vec = [random.uniform(-1, 1) for _ in range(1024)]
+            results = idx.query(vector=vec, top_k=min(total, 10000), include_metadata=True)
+            for match in results.get("matches", []):
+                md = match.get("metadata", {})
+                doc_id = md.get("doc_id")
+                if doc_id and doc_id not in docs:
+                    docs[doc_id] = {
+                        "doc_id": doc_id,
+                        "filename": md.get("filename", ""),
+                        "ext": md.get("ext", ""),
+                        "top_folder": md.get("top_folder", ""),
+                        "size_mb": md.get("size_mb", 0),
+                        "source": md.get("source", "local"),
+                        "r2_original": md.get("r2_original", ""),
+                        "r2_extracted": md.get("r2_extracted", ""),
+                    }
+            return list(docs.values())
+
+        # 分批 fetch metadata（每批最多 1000）
+        for i in range(0, len(all_ids), 1000):
+            batch_ids = all_ids[i:i + 1000]
+            fetched = idx.fetch(ids=batch_ids)
+            for vid, vdata in fetched.get("vectors", {}).items():
+                md = vdata.get("metadata", {})
+                doc_id = md.get("doc_id")
+                if doc_id and doc_id not in docs:
+                    docs[doc_id] = {
+                        "doc_id": doc_id,
+                        "filename": md.get("filename", ""),
+                        "ext": md.get("ext", ""),
+                        "top_folder": md.get("top_folder", ""),
+                        "size_mb": md.get("size_mb", 0),
+                        "source": md.get("source", "local"),
+                        "r2_original": md.get("r2_original", ""),
+                        "r2_extracted": md.get("r2_extracted", ""),
+                    }
         return list(docs.values())
     except Exception as e:
         print(f"list_all_docs 出错: {e}")
