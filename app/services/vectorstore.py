@@ -38,7 +38,7 @@ def upsert(ids: List[str], vectors: List[List[float]],
     """批量 upsert（Pinecone v10 API: vectors=[(id, values, metadata), ...]）"""
     idx = get_index()
     for start in range(0, len(ids), batch_size):
-        end = start + batch_size
+        end = min(start + batch_size, len(ids))
         # 把 text 存入 metadata（Pinecone v10 不再支持 documents 参数）
         batch = []
         for i in range(start, end):
