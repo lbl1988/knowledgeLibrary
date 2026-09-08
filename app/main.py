@@ -39,8 +39,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 静态资源
-app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+# 静态资源（目录不存在则跳过，避免启动报错）
+_static_dir = os.path.join(BASE_DIR, "static")
+if os.path.isdir(_static_dir):
+    app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 # 注册路由
