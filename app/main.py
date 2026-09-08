@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """FastAPI 入口 —— 薄 main，只管生命周期 + 路由注册 + 首页"""
 import os
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, Request
 from fastapi.responses import HTMLResponse
@@ -20,11 +21,23 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """启动时确保 R2 bucket 存在"""
+    """启动时确保 R2 bucket 存在，并预加载文档列表缓存"""
     try:
         storage.ensure_buckets()
     except Exception as e:
         print(f"R2 初始化跳过（key 未配置?）: {e}")
+
+    # 后台预加载文档列表缓存（首次全量扫描较慢，避免用户请求超时）
+    async def _warm_cache():
+        await asyncio.sleep(2)
+        try:
+            from app.routes.browse import _list_all_docs
+            docs = _list_all_docs(force_refresh=True)
+            print(f"[缓存预热] 文档列表已加载: {len(docs)} 个文档")
+        except Exception as e:
+            print(f"[缓存预热] 失败: {e}")
+    asyncio.create_task(_warm_cache())
+
     yield
 
 
