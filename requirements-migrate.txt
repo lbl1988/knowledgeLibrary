@@ -1,0 +1,15 @@
+# ===== 本地迁移依赖（仅首次导入文档时用，Render 部署不需要）=====
+# 安装: pip install -r requirements-migrate.txt
+
+# 文档解析（本地迁移时解析各种格式）
+PyMuPDF>=1.24.0
+python-docx>=1.1.0
+openpyxl>=3.1.0
+python-pptx>=0.6.23
+xlrd>=2.0.1
+rapidocr-onnxruntime>=1.3.0
+pikepdf>=8.0.0
+
+# 旧版网页抓取（新代码用 Jina AI 搜索 API，不需要这些）
+readability-lxml>=0.8.1
+beautifulsoup4>=4.12.0
