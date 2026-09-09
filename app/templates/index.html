@@ -81,14 +81,14 @@ h1 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
 {% if enable_auth %}
 <div id="auth-overlay">
   <div class="auth-card">
-    <h2>知识库登录</h2>
+    <h2 id="auth-title">知识库登录</h2>
     <div id="auth-form">
       <input id="auth-email" type="email" placeholder="邮箱">
-      <input id="auth-password" type="password" placeholder="密码">
-      <button onclick="doLogin()">登录</button>
+      <input id="auth-password" type="password" placeholder="密码（至少6位）">
+      <button id="auth-submit-btn" onclick="doLogin()">登录</button>
       <button style="background:none;border:1px solid var(--border);color:var(--text)" onclick="doMagicLink()">发送邮箱登录链接</button>
     </div>
-    <div class="auth-link" onclick="toggleMode()" id="auth-mode-switch">没有账号？发送邀请</div>
+    <div class="auth-link" onclick="toggleMode()" id="auth-mode-switch">没有账号？注册</div>
   </div>
 </div>
 {% endif %}
@@ -134,12 +134,37 @@ const SUPABASE_KEY = {{ supabase_key | tojson }};
 let supabaseClient = null;
 try { supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch(e) { console.error('Supabase init failed:', e); }
 
+let authMode = 'login'; // 'login' | 'register'
+
 async function doLogin(){
   const email = document.getElementById('auth-email').value.trim();
   const password = document.getElementById('auth-password').value.trim();
   const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
   if(error) alert('登录失败: ' + error.message);
   else { document.getElementById('auth-overlay').classList.remove('show'); document.getElementById('user-bar').style.display='flex'; document.getElementById('user-email').textContent = data.user.email; sessionStorage.setItem('kb_token', data.session.access_token); loadOverview(); loadDirs(); loadTypes(); }
+}
+async function doRegister(){
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value.trim();
+  if(password.length < 6){ alert('密码至少6位'); return; }
+  const { data, error } = await supabaseClient.auth.signUp({ email, password });
+  if(error){ alert('注册失败: ' + error.message); return; }
+  if(data.session){
+    // 邮箱确认已关闭，注册后自动登录
+    alert('注册成功，已自动登录');
+    document.getElementById('auth-overlay').classList.remove('show');
+    document.getElementById('user-bar').style.display='flex';
+    document.getElementById('user-email').textContent = data.user.email;
+    sessionStorage.setItem('kb_token', data.session.access_token);
+    loadOverview(); loadDirs(); loadTypes();
+  } else {
+    alert('注册成功，请查收邮箱确认后登录');
+    toggleMode(); // 切回登录
+  }
+}
+function onAuthSubmit(){
+  if(authMode === 'login') doLogin();
+  else doRegister();
 }
 async function doMagicLink(){
   const email = document.getElementById('auth-email').value.trim();
@@ -148,7 +173,23 @@ async function doMagicLink(){
   else alert('登录链接已发送到 ' + email + '，请查收邮件');
 }
 async function logout(){ sessionStorage.removeItem('kb_token'); document.getElementById('auth-overlay').classList.add('show'); document.getElementById('user-bar').style.display='none'; }
-function toggleMode(){ alert('注册请联系管理员发送邀请'); }
+function toggleMode(){
+  authMode = authMode === 'login' ? 'register' : 'login';
+  const title = document.getElementById('auth-title');
+  const btn = document.getElementById('auth-submit-btn');
+  const switchEl = document.getElementById('auth-mode-switch');
+  if(authMode === 'register'){
+    title.textContent = '知识库注册';
+    btn.textContent = '注册并登录';
+    btn.onclick = doRegister;
+    switchEl.textContent = '已有账号？登录';
+  } else {
+    title.textContent = '知识库登录';
+    btn.textContent = '登录';
+    btn.onclick = doLogin;
+    switchEl.textContent = '没有账号？注册';
+  }
+}
 
 async function checkAuth(){
   const token = sessionStorage.getItem('kb_token');
