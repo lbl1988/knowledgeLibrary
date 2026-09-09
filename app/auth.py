@@ -66,8 +66,8 @@ def _decode_with_jwks(token: str, keys: list) -> Optional[dict]:
                     )
                     from cryptography.hazmat.primitives import serialization
                     from cryptography.hazmat.backends import default_backend
-                    x = int.from_bytes(base64url_decode(key_data["x"]), "big")
-                    y = int.from_bytes(base64url_decode(key_data["y"]), "big")
+                    x = int.from_bytes(base64url_decode(key_data["x"].encode()), "big")
+                    y = int.from_bytes(base64url_decode(key_data["y"].encode()), "big")
                     nums = EllipticCurvePublicNumbers(x, y, SECP256R1())
                     pub_key = nums.public_key(default_backend())
                     pem = pub_key.public_bytes(
@@ -81,7 +81,7 @@ def _decode_with_jwks(token: str, keys: list) -> Optional[dict]:
                     return payload
                 elif kty == "oct":
                     # HS256 共享密钥（JWKS 里的 legacy secret）
-                    secret = base64url_decode(key_data["k"])
+                    secret = base64url_decode(key_data["k"].encode())
                     payload = jwt.decode(
                         token, secret, algorithms=["HS256"], audience="authenticated",
                     )
