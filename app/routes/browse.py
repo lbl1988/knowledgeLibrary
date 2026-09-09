@@ -16,12 +16,37 @@ _CACHE_TTL: float = 300.0  # 5 分钟
 
 
 def _list_all_docs(force_refresh: bool = False) -> list[dict]:
-    """从 Pinecone 拉所有向量的 metadata，按 doc_id 去重取文档（带缓存）"""
+    """从 R2 下载文档索引 JSON（避免 Pinecone 全量扫描消耗 egress），失败则回退 Pinecone"""
     global _docs_cache, _docs_cache_ts
     now = time.time()
     if not force_refresh and _docs_cache and (now - _docs_cache_ts) < _CACHE_TTL:
         return _docs_cache
 
+    import json
+    from app.services.storage import download_bytes, R2_BUCKET_EXTRACTED
+
+    # 优先从 R2 读取文档索引（R2 免费 egress，无带宽限制）
+    try:
+        raw = download_bytes(R2_BUCKET_EXTRACTED, "_docs_index.json")
+        docs = json.loads(raw.decode("utf-8"))
+        # 确保字段完整
+        for d in docs:
+            d.setdefault("doc_id", str(d.get("doc_id", "")))
+            d.setdefault("filename", "")
+            d.setdefault("ext", "")
+            d.setdefault("top_folder", "(根)")
+            d.setdefault("size_mb", 0)
+            d.setdefault("source", "local")
+            d.setdefault("r2_original", "")
+            d.setdefault("r2_extracted", "")
+        _docs_cache = docs
+        _docs_cache_ts = now
+        print(f"[list_all_docs] 从 R2 加载 {len(docs)} 个文档")
+        return _docs_cache
+    except Exception as e:
+        print(f"[list_all_docs] R2 读取失败，回退 Pinecone: {e}")
+
+    # 回退：从 Pinecone 全量扫描（仅在 R2 不可用时使用，可能触发 egress 限制）
     from app.services.vectorstore import get_index
 
     try:
@@ -37,7 +62,6 @@ def _list_all_docs(force_refresh: bool = False) -> list[dict]:
         if total == 0:
             return []
 
-        # 用 list() 拉所有向量 ID（serverless index 支持），再分批 fetch metadata
         all_ids = []
         try:
             for page in idx.list(prefix=""):
@@ -45,7 +69,6 @@ def _list_all_docs(force_refresh: bool = False) -> list[dict]:
                     all_ids.append(item.id if hasattr(item, 'id') else str(item))
         except Exception as le:
             print(f"list() 不可用，回退到 query: {le}")
-            # 回退：用随机向量 + 大 top_k 查
             import random
             vec = [random.uniform(-1, 1) for _ in range(1024)]
             results = idx.query(vector=vec, top_k=min(total, 10000), include_metadata=True)
@@ -67,7 +90,6 @@ def _list_all_docs(force_refresh: bool = False) -> list[dict]:
             _docs_cache_ts = now
             return _docs_cache
 
-        # 分批 fetch metadata（每批 100，避免 URL 过长）
         for i in range(0, len(all_ids), 100):
             batch_ids = all_ids[i:i + 100]
             fetched = idx.fetch(ids=batch_ids)
