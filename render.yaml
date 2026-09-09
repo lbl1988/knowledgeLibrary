@@ -27,6 +27,8 @@ services:
         value: kb-extracted
       - key: JINA_API_KEY
         sync: false
+      - key: SERPER_API_KEY
+        sync: false
       - key: JINA_EMBED_MODEL
         value: jina-embeddings-v3
       - key: JINA_EMBED_DIM

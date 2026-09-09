@@ -28,8 +28,11 @@ SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")  # 从 Supabase JWT 配置里复制
 SUPABASE_ENABLE_AUTH = os.getenv("SUPABASE_ENABLE_AUTH", "false").lower() == "true"
 
-# ---- 全网搜索（使用 Jina AI Search API s.jina.ai，复用上面的 JINA_API_KEY）----
-# 无需单独的 Bing API Key，Jina 搜索 API 使用同一个 JINA_API_KEY
+# ---- 全网搜索 ----
+# Serper.dev (Google 搜索, 2500次/月免费) —— 注册 https://serper.dev
+# 不配置则降级使用 DuckDuckGo (无需 key, 可能受限)
+# 正文统一用 Jina Reader r.jina.ai (免费, 无需 key)
+SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
 
 # ---- 本地迁移 ----
 LOCAL_KB_DIR = os.getenv("LOCAL_KB_DIR",

@@ -35,11 +35,11 @@ Supabase 已于 2025 年将 JWT 签名从 HS256 迁移到 ECC P-256（ES256）�
 
 **环境变量（Render / .env）：**
 
-| 变量 | 值 | 说明 |
-|---|---|---|
-| `SUPABASE_URL` | `https://<project-ref>.supabase.co` | Supabase 项目 URL |
-| `SUPABASE_ANON_KEY` | `sb_publishable_...`（新格式） | **新的 Publishable Key**，不是旧的 JWT 格式 anon key |
-| `SUPABASE_ENABLE_AUTH` | `true` | 设为 `false` 可跳过认证（仅本地调试） |
+| 变量                     | 值                                   | 说明                                          |
+| ---------------------- | ----------------------------------- | ------------------------------------------- |
+| `SUPABASE_URL`         | `https://<project-ref>.supabase.co` | Supabase 项目 URL                             |
+| `SUPABASE_ANON_KEY`    | `sb_publishable_...`（新格式）           | **新的 Publishable Key**，不是旧的 JWT 格式 anon key |
+| `SUPABASE_ENABLE_AUTH` | `true`                              | 设为 `false` 可跳过认证（仅本地调试）                     |
 
 > ⚠️ **关键**：`SUPABASE_ANON_KEY` 必须用 Supabase Dashboard → API Keys 页面的 **Publishable Key**（`sb_publishable_` 开头），旧的 Legacy anon key（`eyJhbGci...` 开头）Supabase Auth API 已拒绝。
 
@@ -57,6 +57,7 @@ python migrate.py
 ```
 
 脚本会自动：
+
 1. 读本地 SQLite kb.db（173 文档 + 46247 chunk）
 2. 上传原文件到 R2 kb-originals/
 3. 上传提取文本到 R2 kb-extracted/
@@ -73,23 +74,23 @@ python migrate.py
 
 ## 注册服务速查
 
-| 服务 | 注册地址 | 免费额度 |
-|---|---|---|
-| Pinecone | pinecone.io | 10万向量 |
-| Cloudflare | dash.cloudflare.com | R2 10GB |
-| Jina AI | jina.ai | 1000万token（嵌入+搜索） |
-| Supabase | supabase.com | 无限用户 |
-| Render | render.com | 512MB |
+| 服务         | 注册地址                | 免费额度              |
+| ---------- | ------------------- | ----------------- |
+| Pinecone   | pinecone.io         | 10万向量             |
+| Cloudflare | dash.cloudflare.com | R2 10GB           |
+| Jina AI    | jina.ai             | 1000万token（嵌入+搜索） |
+| Supabase   | supabase.com        | 无限用户              |
+| Render     | render.com          | 512MB             |
 
 ## 免费额度校验
 
-| 资源 | 用量 | 免费额度 | 够？ |
-|---|---|---|---|
-| Pinecone 向量 | 46247 | 100000 | ✅ |
-| R2 存储 | ~1.4GB | 10GB | ✅ |
-| R2 出站 | 无限 | 无限 | ✅ |
-| Jina 嵌入 | 46万token | 1000万 | ✅ |
-| Jina 搜索 | ~50次/月 | 1000次（约） | ✅ |
+| 资源          | 用量       | 免费额度     | 够？ |
+| ----------- | -------- | -------- | -- |
+| Pinecone 向量 | 46247    | 100000   | ✅  |
+| R2 存储       | \~1.4GB  | 10GB     | ✅  |
+| R2 出站       | 无限       | 无限       | ✅  |
+| Jina 嵌入     | 46万token | 1000万    | ✅  |
+| Jina 搜索     | \~50次/月  | 1000次（约） | ✅  |
 
 ## 禁用认证（开发调试）
 
@@ -128,28 +129,35 @@ knowledgeLibrary/
 
 ## API 速查
 
-所有 API 需在 `Authorization: Bearer <token>` 头携带 Supabase access_token（`SUPABASE_ENABLE_AUTH=false` 时跳过）。
+所有 API 需在 `Authorization: Bearer <token>` 头携带 Supabase access\_token（`SUPABASE_ENABLE_AUTH=false` 时跳过）。
 
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/api/browse/overview` | 总览（文档数、chunk 数、按目录/类型分布） |
-| GET | `/api/browse/dirs` | 按目录汇总 |
-| GET | `/api/browse/types` | 按文件类型汇总 |
-| GET | `/api/browse/files?folder=&ext=&source=` | 文件列表 |
-| GET | `/api/search?q=&limit=` | 语义搜索（Pinecone 向量相似度） |
-| GET | `/api/crawl?q=&limit=` | 全网搜索（Jina SearchAPI） |
-| GET | `/api/chunk/{doc_id}/{chunk_index}` | chunk 详情 |
-| GET | `/api/open/original/{doc_id}` | 原文件预签名 URL |
-| GET | `/api/open/extracted/{doc_id}` | 提取文本预签名 URL |
-| POST | `/api/crawl` | 全网抓取入库 |
-| GET | `/health` | 健康检查（无需认证） |
+| 方法   | 路径                                       | 说明                       |
+| ---- | ---------------------------------------- | ------------------------ |
+| GET  | `/api/browse/overview`                   | 总览（文档数、chunk 数、按目录/类型分布） |
+| GET  | `/api/browse/dirs`                       | 按目录汇总                    |
+| GET  | `/api/browse/types`                      | 按文件类型汇总                  |
+| GET  | `/api/browse/files?folder=&ext=&source=` | 文件列表                     |
+| GET  | `/api/search?q=&limit=`                  | 语义搜索（Pinecone 向量相似度）     |
+| GET  | `/api/crawl?q=&limit=`                   | 全网搜索（Jina SearchAPI）     |
+| GET  | `/api/chunk/{doc_id}/{chunk_index}`      | chunk 详情                 |
+| GET  | `/api/open/original/{doc_id}`            | 原文件预签名 URL               |
+| GET  | `/api/open/extracted/{doc_id}`           | 提取文本预签名 URL              |
+| POST | `/api/crawl`                             | 全网抓取入库                   |
+| GET  | `/health`                                | 健康检查（无需认证）               |
 
 ## 技术栈
 
 - **后端**：FastAPI + python-jose + cryptography
+
 - **前端**：原生 HTML/JS + Supabase JS Client（CDN）
+
 - **向量库**：Pinecone
+
 - **对象存储**：Cloudflare R2
+
 - **嵌入/搜索**：Jina AI
+
 - **认证**：Supabase Auth（JWT，JWKS 动态验证）
+
 - **部署**：Render（自动从 GitHub 构建）
+

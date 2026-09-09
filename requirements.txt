@@ -17,6 +17,9 @@ boto3>=1.34.0
 httpx>=0.27.0
 requests>=2.31.0
 
+# 全网搜索（降级用 —— 主搜索用 Serper，需 SERPER_API_KEY）
+duckduckgo-search>=6.0.0
+
 # 数值计算（嵌入向量处理）
 numpy>=1.24.0
 
