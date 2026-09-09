@@ -2,7 +2,15 @@
 """FastAPI 入口 —— 薄 main，只管生命周期 + 路由注册 + 首页"""
 import os
 import asyncio
+import logging
 from contextlib import asynccontextmanager
+
+# 确保 auth 模块的日志能输出到 Render logs
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+
 from fastapi import FastAPI, Depends, Request
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
