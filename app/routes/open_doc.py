@@ -6,11 +6,9 @@
   2. 不跳转到本地打开 —— 不返回 file:// 也不调 os.startfile。
   3. 在线浏览 / 下载到本地 二选一 —— 通过 ResponseContentDisposition 控制。
 """
-import os
+import os, json
 from fastapi import APIRouter, Depends, HTTPException
-from app.services.storage import get_presigned_url
-from app.services.vectorstore import query as pinecone_query
-from app.services.embedder import embed_single
+from app.services.storage import get_presigned_url, download_bytes
 from app.config import R2_BUCKET_ORIGINALS, R2_BUCKET_EXTRACTED
 from app.auth import get_current_user
 
@@ -58,14 +56,38 @@ def _get_ext(filename: str) -> str:
     return os.path.splitext(filename or "")[1].lower()
 
 
+# 文档索引缓存（从 R2 下载，避免每次请求都拉取）
+_docs_index_cache: list | None = None
+_docs_index_ts: float = 0
+_INDEX_TTL: float = 300.0
+
+
+def _get_docs_index() -> list[dict]:
+    """从 R2 下载文档索引 JSON（带缓存）"""
+    import time
+    global _docs_index_cache, _docs_index_ts
+    now = time.time()
+    if _docs_index_cache and (now - _docs_index_ts) < _INDEX_TTL:
+        return _docs_index_cache
+    try:
+        from app.services.storage import R2_BUCKET_EXTRACTED
+        raw = download_bytes(R2_BUCKET_EXTRACTED, "_docs_index.json")
+        _docs_index_cache = json.loads(raw.decode("utf-8"))
+        _docs_index_ts = now
+    except Exception as e:
+        print(f"[open_doc] R2 文档索引读取失败: {e}")
+        if not _docs_index_cache:
+            raise HTTPException(status_code=503, detail="文档索引暂不可用")
+    return _docs_index_cache
+
+
 def _find_doc_metadata(doc_id: str) -> dict:
-    """从 Pinecone 查出 doc_id 对应的任意一条 metadata"""
-    vec = embed_single("")
-    results = pinecone_query(vec.tolist(), top_k=1, filter_meta={"doc_id": doc_id})
-    matches = results.get("matches", [])
-    if not matches:
-        raise HTTPException(status_code=404, detail="文档不存在")
-    return matches[0]["metadata"]
+    """从 R2 文档索引查出 doc_id 对应的 metadata"""
+    docs = _get_docs_index()
+    for d in docs:
+        if str(d.get("doc_id")) == str(doc_id):
+            return d
+    raise HTTPException(status_code=404, detail="文档不存在")
 
 
 def _resolve_original(md: dict) -> tuple:
