@@ -131,19 +131,19 @@ h1 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
 {% if enable_auth %}
 const SUPABASE_URL = {{ supabase_url | tojson }};
 const SUPABASE_KEY = {{ supabase_key | tojson }};
-let supabase = null;
-try { supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch(e) {}
+let supabaseClient = null;
+try { supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch(e) { console.error('Supabase init failed:', e); }
 
 async function doLogin(){
   const email = document.getElementById('auth-email').value.trim();
   const password = document.getElementById('auth-password').value.trim();
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
   if(error) alert('登录失败: ' + error.message);
   else { document.getElementById('auth-overlay').classList.remove('show'); document.getElementById('user-bar').style.display='flex'; document.getElementById('user-email').textContent = data.user.email; sessionStorage.setItem('kb_token', data.session.access_token); loadOverview(); loadDirs(); loadTypes(); }
 }
 async function doMagicLink(){
   const email = document.getElementById('auth-email').value.trim();
-  const { error } = await supabase.auth.signInWithOtp({ email });
+  const { error } = await supabaseClient.auth.signInWithOtp({ email });
   if(error) alert('发送失败: ' + error.message);
   else alert('登录链接已发送到 ' + email + '，请查收邮件');
 }
@@ -154,7 +154,7 @@ async function checkAuth(){
   const token = sessionStorage.getItem('kb_token');
   if(!token){ document.getElementById('auth-overlay').classList.add('show'); return null; }
   try {
-    const { data: { user } } = await supabase.auth.getUser(token);
+    const { data: { user } } = await supabaseClient.auth.getUser(token);
     if(user){ document.getElementById('auth-overlay').classList.remove('show'); document.getElementById('user-bar').style.display='flex'; document.getElementById('user-email').textContent = user.email; return token; }
     else { sessionStorage.removeItem('kb_token'); document.getElementById('auth-overlay').classList.add('show'); return null; }
   } catch(e) { sessionStorage.removeItem('kb_token'); document.getElementById('auth-overlay').classList.add('show'); return null; }
